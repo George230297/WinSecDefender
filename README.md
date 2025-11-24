@@ -4,6 +4,9 @@
 
 Combina la potencia de Python, la profundidad de PowerShell y el acceso a bajo nivel de C# para auditar servidores Windows (2012+), detectando fallas críticas como SMBv1, Unquoted Service Paths y configuraciones débiles de UAC.
 
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
 ## 🚀 Instalación
 
 1.  **Clonar repositorio:**
