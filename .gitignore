@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+venv/
+*.exe
+*.obj
+bin/*.exe
+reports/*.txt
+*.log
+SANITIZAR_*.ps1
+.vscode/

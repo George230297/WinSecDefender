@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinSec Defender</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+        .card { background-color: #1e1e1e; border: 1px solid #333; margin-bottom: 20px; }
+        .status-safe { color: #198754; font-weight: bold; }
+        .status-danger { color: #dc3545; font-weight: bold; }
+        .terminal { background: #000; color: #0f0; padding: 15px; border-radius: 5px; min-height: 200px; font-family: monospace; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark border-bottom border-secondary mb-4">
+  <div class="container-fluid">
+    <span class="navbar-brand"><i class="fas fa-shield-alt"></i> WinSec Defender</span>
+  </div>
+</nav>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card p-3 text-center">
+                <h5>Estado General</h5>
+                <h3 id="main-status" class="text-muted">Desconocido</h3>
+                <button onclick="startScan()" class="btn btn-primary mt-3" id="btn-scan">Escanear Servidor</button>
+                <button onclick="sanitize()" class="btn btn-danger mt-2" id="btn-fix" style="display:none;">Generar Corrección</button>
+            </div>
+            <div class="card p-3">
+                <h6>Detalles Críticos</h6>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item bg-transparent text-white">SMBv1: <span id="lbl-smb">-</span></li>
+                    <li class="list-group-item bg-transparent text-white">Unquoted Paths: <span id="lbl-paths">-</span></li>
+                    <li class="list-group-item bg-transparent text-white">UAC: <span id="lbl-uac">-</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">Terminal de Salida</div>
+                <div class="card-body terminal" id="terminal">System Ready...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const log = (msg) => document.getElementById('terminal').innerHTML += `<div>> ${msg}</div>`;
+
+    async function startScan() {
+        document.getElementById('terminal').innerHTML = "";
+        document.getElementById('btn-scan').disabled = true;
+        log("Iniciando escáner híbrido...");
+        
+        const res = await fetch('/api/scan');
+        const data = await res.json();
+        
+        if(data.status === "error") { log("Error: " + data.message); return; }
+        
+        // UI Updates
+        document.getElementById('lbl-smb').innerText = data.system.SMBv1_Status;
+        document.getElementById('lbl-paths').innerText = data.system.Unquoted_Services === 'None' ? 'OK' : 'DETECTADO';
+        document.getElementById('lbl-uac').innerText = data.uac.Risk;
+        
+        const status = document.getElementById('main-status');
+        const btnFix = document.getElementById('btn-fix');
+        
+        if(data.vulnerable) {
+            status.innerText = "VULNERABLE";
+            status.className = "status-danger";
+            btnFix.style.display = "block";
+            log("ALERT: Vulnerabilidades detectadas.");
+        } else {
+            status.innerText = "SEGURO";
+            status.className = "status-safe";
+            log("Sistema seguro.");
+        }
+        document.getElementById('btn-scan').disabled = false;
+    }
+
+    async function sanitize() {
+        if(!confirm("¿Generar script de reparación?")) return;
+        const res = await fetch('/api/sanitize', { method: 'POST' });
+        const data = await res.json();
+        log(data.message);
+        alert("Script guardado. Ejecútalo manualmente.");
+    }
+</script>
+</body>
+</html>
