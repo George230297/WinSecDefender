@@ -1,40 +1,62 @@
-# 🛡️ WinSec Defender
+# WinSecDefender 🛡️
 
-**Herramienta Híbrida de Detección y Sanitización de Vulnerabilidades para Windows Server.**
+**WinSecDefender** is a security hardening and vulnerability scanner for Windows Server 2012+ environments. It performs network port scanning, system configuration audits (via PowerShell), and UAC policy checks (via C#).
 
-Combina la potencia de Python, la profundidad de PowerShell y el acceso a bajo nivel de C# para auditar servidores Windows (2012+), detectando fallas críticas como SMBv1, Unquoted Service Paths y configuraciones débiles de UAC.
+## 🚀 Features
 
-## 🚀 Instalación
+- **Port Scanning**: Identifies open ports (FTP, SMB, RDP).
+- **System Hardening**: Checks for SMBv1, Unquoted Service Paths, and Patch status.
+- **UAC Verification**: Ensures User Account Control is enabled via a custom C# binary.
+- **Auto-Remediation**: Generates a PowerShell script to fix identified vulnerabilities.
+- **Modern Dashboard**: Web-based interface built with FastAPI.
 
-1.  **Clonar repositorio:**
-    ```bash
-    git clone [https://github.com/TU_USUARIO/WinSec-Defender.git](https://github.com/TU_USUARIO/WinSec-Defender.git)
-    cd WinSec-Defender
-    ```
-2.  **Instalar requisitos:**
+## 🛠️ Installation
+
+1.  **Requirements**:
+
+    - Python 3.8+
+    - .NET Framework 4.5+ (for C# component)
+    - PowerShell 5.1+
+
+2.  **Setup**:
+
     ```bash
     pip install -r requirements.txt
     ```
-3.  **Compilar Módulo C#:**
-    Necesitas compilar el inspector de registro para que funcione la detección de UAC.
-    ```cmd
-    cd src/core
-    C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /out:..\..\bin\RegistryInspector.exe RegistryInspector.cs
-    cd ..\..
-    ```
-    *Verifica que `RegistryInspector.exe` aparezca en la carpeta `bin/`.*
 
-## ▶️ Ejecución
-
-1.  Abrir terminal como **Administrador**.
-2.  Iniciar el servidor web:
+3.  **Compile Components**:
+    Run the build script to compile the C# helper:
     ```bash
-    python src/web/server.py
+    python build.py
     ```
-3.  Abrir navegador en: `http://127.0.0.1:8000`
 
-## ⚠️ Disclaimer
-Herramienta creada con fines educativos y de Blue Teaming. Revisar siempre los scripts de sanitización antes de ejecutarlos en producción.
+## 🏃 Usage
 
-## 📄 Licencia
-MIT License.
+1.  **Start the Server**:
+
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+
+    Or simply run `python -m app.main` if configured.
+
+2.  **Access Dashboard**:
+    Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser.
+
+3.  **Run Scan**:
+    Click "Run Scan" to analyze the system. If vulnerabilities are found, click "Generate Fixes" to create a remediation script.
+
+## 📂 Project Structure
+
+- `app/`: Main Python application (FastAPI).
+  - `api/`: API Routes and Logic.
+  - `core/`: Scanner logic and configuration.
+  - `templates/`: Web dashboard.
+- `scripts/`: Helper scripts (`audit_script.ps1`, `RegistryInspector.cs`).
+- `bin/`: Compiled executables.
+- `reports/`: Scan output directories.
+
+## ⚠️ Compatibility
+
+- Designed for **Windows Server 2012 R2** and newer.
+- Requires Administrator privileges for full auditing.
