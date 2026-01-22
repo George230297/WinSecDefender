@@ -3,6 +3,7 @@ import socket
 import json
 import os
 import logging
+import tempfile
 from datetime import datetime
 from typing import Dict, List, Any
 from app.core.config import settings
@@ -24,7 +25,6 @@ class HybridScanner:
             445: "SMB (Windows File Sharing)",
             3389: "RDP (Remote Desktop)"
         }
-        open_ports = []
         
         async def check_port(port, desc):
             try:
@@ -80,7 +80,7 @@ class HybridScanner:
 
     def _analyze_ps_results(self, ps_data: Dict[str, Any]):
         """Analyze results and generate fixes"""
-        if ps_data.get("SMBv1_Status") == "Enabled":
+        if ps_data.get("SMBv1_Status") == "Enabled" or ps_data.get("SMBv1_Status") == "Likely Enabled":
             self.fixes.append({
                 "desc": "Disable SMBv1 (WannaCry Risk)",
                 "cmd": "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart"
@@ -98,10 +98,13 @@ foreach ($service in $services) {
 }'''
             self.fixes.append({"desc": "Fix Unquoted Service Paths", "cmd": fix_code})
 
-    async def run_csharp_module(self) -> Dict[str, str]:
-        """Executes C# binary asynchronously"""
+    async def run_csharp_module(self, 
+            key_path: str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", 
+            value_name: str = "EnableLUA", 
+            expected_val: str = "1") -> Dict[str, str]:
+        """Executes C# binary asynchronously with arguments"""
         exe_path = os.path.join(settings.BIN_DIR, "RegistryInspector.exe")
-        logger.info(f"Running C#: {exe_path}")
+        logger.info(f"Running Cui #: {exe_path}")
         
         if not os.path.exists(exe_path):
             result = {"Status": "Error", "Risk": "Binary Missing - Please Compile"}
@@ -109,8 +112,9 @@ foreach ($service in $services) {
             return result
 
         try:
+            # Pass arguments to the binary
             process = await asyncio.create_subprocess_exec(
-                exe_path,
+                exe_path, key_path, value_name, expected_val,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -121,10 +125,10 @@ foreach ($service in $services) {
             if "ERROR" in status:
                 risk = "UNKNOWN"
                 
-            result = {"Status": status, "Risk": risk}
+            result = {"Status": status, "Risk": risk, "Check": f"{key_path}\\{value_name}"}
             self.report_data["UAC_Check"] = result
             
-            if risk == "HIGH":
+            if risk == "HIGH" and value_name == "EnableLUA":
                 self.fixes.append({
                     "desc": "Enable UAC (Secure Desktop)",
                     "cmd": 'Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 1'
@@ -136,26 +140,35 @@ foreach ($service in $services) {
             self.report_data["UAC_Check"] = result
             return result
 
-    def generate_remediation_script(self) -> str:
-        """Generates remediation script"""
+    def generate_remediation_content(self) -> str:
+        """Generates remediation script content in memory"""
         if not self.fixes:
             return ""
         
-        filename = os.path.join(settings.ROOT_DIR, f"REMEDIATION_{self.target_ip.replace('.','_')}.ps1")
+        content = []
+        content.append(f"# WINSEC DEFENDER REMEDIATION SCRIPT - {self.timestamp}")
+        content.append("# RUN AS ADMINISTRATOR")
+        content.append("$ErrorActionPreference = 'Stop'\n")
         
+        for i, fix in enumerate(self.fixes, 1):
+            content.append(f"Write-Host 'Applying Fix {i}: {fix['desc']}' -ForegroundColor Cyan")
+            content.append(f"{fix['cmd']}")
+            content.append("if ($?) { Write-Host 'Success' -ForegroundColor Green } else { Write-Host 'Failed' -ForegroundColor Red }\n")
+        
+        content.append("Write-Host 'Remediation completed.' -ForegroundColor Green")
+        return "\n".join(content)
+
+    def save_remediation_temp_file(self) -> str:
+        """Saves content to a temp file and returns path"""
+        content = self.generate_remediation_content()
+        if not content:
+            return ""
+            
         try:
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(f"# WINSEC DEFENDER REMEDIATION SCRIPT - {self.timestamp}\n")
-                f.write("# RUN AS ADMINISTRATOR\n")
-                f.write("$ErrorActionPreference = 'Stop'\n\n")
-                
-                for i, fix in enumerate(self.fixes, 1):
-                    f.write(f"Write-Host 'Applying Fix {i}: {fix['desc']}' -ForegroundColor Cyan\n")
-                    f.write(f"{fix['cmd']}\n")
-                    f.write("if ($?) { Write-Host 'Success' -ForegroundColor Green } else { Write-Host 'Failed' -ForegroundColor Red }\n\n")
-                
-                f.write("Write-Host 'Remediation completed.' -ForegroundColor Green\n")
-            return filename
+            fd, path = tempfile.mkstemp(suffix=".ps1", prefix="REMEDIATION_")
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(content)
+            return path
         except Exception as e:
-            logger.error(f"Failed to write remediation script: {e}")
+            logger.error(f"Failed to write temp remediation script: {e}")
             return ""

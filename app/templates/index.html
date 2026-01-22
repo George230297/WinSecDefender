@@ -28,6 +28,9 @@
                 <h5>Estado General</h5>
                 <h3 id="main-status" class="text-muted">Desconocido</h3>
                 <button onclick="startScan()" class="btn btn-primary mt-3" id="btn-scan">Escanear Servidor</button>
+                <div id="scan-spinner" class="spinner-border text-primary mt-3" role="status" style="display:none;">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
                 <button onclick="sanitize()" class="btn btn-danger mt-2" id="btn-fix" style="display:none;">Generar Corrección</button>
             </div>
             <div class="card p-3">
@@ -54,17 +57,62 @@
     async function startScan() {
         document.getElementById('terminal').innerHTML = "";
         document.getElementById('btn-scan').disabled = true;
-        log("Iniciando escáner híbrido...");
+        document.getElementById('btn-scan').style.display = 'none';
+        document.getElementById('scan-spinner').style.display = 'inline-block';
         
-        const res = await fetch('/api/scan');
-        const data = await res.json();
+        log("Iniciando escáner (Job Background)...");
         
-        if(data.status === "error") { log("Error: " + data.message); return; }
-        
+        try {
+            // Trigger Scan
+            const res = await fetch('/api/scan');
+            const data = await res.json();
+            
+            if(!data.job_id) {
+                throw new Error("No job_id returned");
+            }
+            
+            const jobId = data.job_id;
+            log(`Tarea iniciada ID: ${jobId}. Esperando resultados...`);
+            
+            // Poll for results
+            let attempts = 0;
+            const maxAttempts = 60; // 2 minutes approx
+            
+            const interval = setInterval(async () => {
+                attempts++;
+                const pollRes = await fetch(`/api/status/${jobId}`);
+                const pollData = await pollRes.json();
+                
+                if(pollData.status === 'completed') {
+                    clearInterval(interval);
+                    renderResults(pollData.result);
+                } else if (pollData.status === 'failed') {
+                    clearInterval(interval);
+                    log("Error en el escaneo: " + pollData.error);
+                    resetUI();
+                } else {
+                    if(attempts % 5 === 0) log("Escaneando...");
+                }
+                
+                if(attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    log("Timeout esperando resultados.");
+                    resetUI();
+                }
+            }, 2000);
+            
+        } catch (e) {
+            log("Error request: " + e.message);
+            resetUI();
+        }
+    }
+
+    function renderResults(data) {
         // UI Updates
-        document.getElementById('lbl-smb').innerText = data.system.SMBv1_Status;
-        document.getElementById('lbl-paths').innerText = data.system.Unquoted_Services === 'None' ? 'OK' : 'DETECTADO';
-        document.getElementById('lbl-uac').innerText = data.uac.Risk;
+        document.getElementById('lbl-smb').innerText = data.system.SMBv1_Status || 'Error';
+        const unquoted = data.system.Unquoted_Services;
+        document.getElementById('lbl-paths').innerText = (unquoted === 'None' || !unquoted) ? 'OK' : 'DETECTADO';
+        document.getElementById('lbl-uac').innerText = data.uac.Risk || 'Unknown';
         
         const status = document.getElementById('main-status');
         const btnFix = document.getElementById('btn-fix');
@@ -79,15 +127,36 @@
             status.className = "status-safe";
             log("Sistema seguro.");
         }
+        resetUI();
+    }
+    
+    function resetUI() {
         document.getElementById('btn-scan').disabled = false;
+        document.getElementById('btn-scan').style.display = 'inline-block';
+        document.getElementById('scan-spinner').style.display = 'none';
     }
 
     async function sanitize() {
         if(!confirm("¿Generar script de reparación?")) return;
-        const res = await fetch('/api/sanitize', { method: 'POST' });
-        const data = await res.json();
-        log(data.message);
-        alert("Script guardado. Ejecútalo manualmente.");
+        
+        try {
+            const res = await fetch('/api/sanitize', { method: 'POST' });
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "REMEDIATION_SCRIPT.ps1";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                log("Descarga iniciada.");
+            } else {
+                log("Error generando script.");
+            }
+        } catch (e) {
+            log("Error: " + e.message);
+        }
     }
 </script>
 </body>
