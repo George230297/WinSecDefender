@@ -43,15 +43,19 @@ async def perform_scan(job_id: str, username: str):
         scanner = HybridScanner()
         await scanner.scan_network_ports()
         await scanner.run_powershell_module()
+
         await scanner.run_csharp_module()
+        await scanner.run_filesystem_module()
         
         uac = scanner.report_data.get("UAC_Check", {})
         sys_config = scanner.report_data.get("System_Config", {})
+        fs_check = scanner.report_data.get("FileSystem_Check", {})
         
         is_vulnerable = False
         if (sys_config.get("SMBv1_Status") == "Enabled" or
             sys_config.get("Unquoted_Services") != "None" or
-            uac.get("Risk") == "HIGH"):
+            uac.get("Risk") == "HIGH" or
+            any(f.get("Risk") == "HIGH" for f in fs_check.values())):
             is_vulnerable = True
             
         result = {
@@ -59,6 +63,7 @@ async def perform_scan(job_id: str, username: str):
             "network": scanner.report_data.get("Network_Scan", []),
             "system": sys_config,
             "uac": uac,
+            "filesystem": fs_check,
             "vulnerable": is_vulnerable
         }
         
@@ -92,7 +97,9 @@ async def run_sanitize(username: str = Depends(check_auth)):
     # Ideally optimize to use cached results from scan job
     await scanner.scan_network_ports()
     await scanner.run_powershell_module()
+
     await scanner.run_csharp_module()
+    await scanner.run_filesystem_module()
     
     content = scanner.generate_remediation_content()
     
