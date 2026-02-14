@@ -4,6 +4,7 @@ from app.api.routes import router
 from app.core.config import settings
 import uvicorn
 import os
+import sys
 import logging
 
 # Configure Audit Logging
@@ -31,6 +32,25 @@ if not os.path.exists(static_dir):
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 app.include_router(router)
+
+@app.on_event("startup")
+async def startup_check():
+    bin_path = os.path.join(settings.BIN_DIR, "RegistryInspector.exe")
+    if not os.path.exists(bin_path):
+        logger.warning("RegistryInspector.exe not found. Attempting to build...")
+        try:
+            # Append root dir to sys.path to ensure build.py can be imported if needed
+            if settings.ROOT_DIR not in sys.path:
+                sys.path.append(settings.ROOT_DIR)
+            import build
+            if build.compile_csharp():
+                logger.info("RegistryInspector.exe built successfully.")
+            else:
+                logger.error("Failed to build RegistryInspector.exe. C# Strategy will be unavailable.")
+        except ImportError:
+            logger.error("Could not import build.py. Please run 'python build.py' manually.")
+        except Exception as e:
+            logger.error(f"Error during startup build: {e}")
 
 if __name__ == "__main__":
     print(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}")

@@ -94,11 +94,37 @@ class RegistryAuditStrategy(IScanStrategy):
             )
             stdout, stderr = await process.communicate()
             
-            status_output = stdout.decode().strip()
-            risk = "HIGH" if "VULNERABLE" in status_output else "LOW"
-            if "ERROR" in status_output:
-                risk = "UNKNOWN"
+            output_str = stdout.decode().strip()
+            # Try to find JSON in output (lines might contain noise)
+            status_output = "UNKNOWN"
+            risk = "UNKNOWN"
+            
+            try:
+                # Find the last line that looks like JSON
+                import json
+                last_line = output_str.splitlines()[-1] if output_str else ""
+                data = json.loads(last_line)
                 
+                status_output = data.get("status", "UNKNOWN")
+                if status_output == "SECURE":
+                    risk = "LOW"
+                elif status_output == "VULNERABLE":
+                    risk = "HIGH"
+                else:
+                    risk = "UNKNOWN" # ERROR case
+                    
+            except (json.JSONDecodeError, IndexError):
+                # Fallback to legacy text parsing or just report raw
+                logger.warning(f"Failed to parse C# JSON: {output_str}")
+                if "VULNERABLE" in output_str:
+                    status_output = "VULNERABLE"
+                    risk = "HIGH"
+                elif "SECURE" in output_str:
+                    status_output = "SECURE"
+                    risk = "LOW"
+                else: 
+                    status_output = f"Raw: {output_str}"
+
             result = {"Status": status_output, "Risk": risk, "Check": f"{key_path}\\{value_name}"}
             return {"UAC_Check": result}
         except Exception as e:

@@ -106,21 +106,49 @@ foreach ($service in $services) {
         return fs_result
 
     def generate_remediation_content(self) -> str:
-        """Generates remediation script content in memory"""
+        """Generates remediation script content using template"""
         if not self.fixes:
             return ""
         
+        template_path = os.path.join(settings.SCRIPTS_DIR, "remediation_template.ps1")
+        if not os.path.exists(template_path):
+            logger.error(f"Template not found: {template_path}")
+            # Fallback to simple string if template missing
+            return self._generate_fallback_remediation()
+
+        try:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template = f.read()
+        except Exception as e:
+            logger.error(f"Error reading template: {e}")
+            return self._generate_fallback_remediation()
+        
+        fix_blocks = []
+        for i, fix in enumerate(self.fixes, 1):
+            block = f"""
+Write-Status "Applying Fix {i}: {fix['desc']}"
+try {{
+    {fix['cmd']}
+    Write-Status "Success: {fix['desc']}" "Green"
+}} catch {{
+    Write-Error "Failed to apply fix: $_"
+}}
+"""
+            fix_blocks.append(block)
+        
+        content = template.replace("{{ timestamp }}", self.timestamp)
+        content = content.replace("{{ fix_blocks }}", "\n".join(fix_blocks))
+        
+        return content
+
+    def _generate_fallback_remediation(self) -> str:
+        """Fallback generation if template is missing"""
         content = []
         content.append(f"# WINSEC DEFENDER REMEDIATION SCRIPT - {self.timestamp}")
         content.append("# RUN AS ADMINISTRATOR")
-        content.append("$ErrorActionPreference = 'Stop'\n")
-        
-        for i, fix in enumerate(self.fixes, 1):
-            content.append(f"Write-Host 'Applying Fix {i}: {fix['desc']}' -ForegroundColor Cyan")
-            content.append(f"{fix['cmd']}")
-            content.append("if ($?) { Write-Host 'Success' -ForegroundColor Green } else { Write-Host 'Failed' -ForegroundColor Red }\n")
-        
-        content.append("Write-Host 'Remediation completed.' -ForegroundColor Green")
+        for fix in self.fixes:
+            content.append(f"Write-Host 'Applying: {fix['desc']}'")
+            content.append(fix['cmd'])
         return "\n".join(content)
 
     def save_remediation_temp_file(self) -> str:

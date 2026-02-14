@@ -101,45 +101,64 @@ classDiagram
 ### Paso 1: Clonar e Instalar Dependencias
 
 ```bash
-git clone https://github.com/tu-usuario/win_sec_defender.git
-cd win_sec_defender
+git clone https://github.com/George230297/WinSecDefender.git
+
+# O si prefieres descargar el ZIP directamente (PowerShell):
+# Nota: La URL del zip asume la rama 'main'.
+Invoke-WebRequest -Uri "https://github.com/George230297/WinSecDefender/archive/refs/heads/main.zip" -OutFile "WinSecDefender.zip"
+Expand-Archive -Path "WinSecDefender.zip" -DestinationPath "."
+cd WinSecDefender-main
+
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-### Paso 2: Compilar Módulos
+### Paso 2: Configuración (Opcional pero Recomendada)
 
-El componente de C# necesita ser compilado para funcionar. Usa el script de construcción incluido:
+WinSecDefender utiliza variables de entorno para una configuración segura. Puedes crear un archivo `.env` basado en el ejemplo:
 
 ```bash
-python build.py
+copy .env.example .env
 ```
 
-_Esto generará `RegistryInspector.exe` en la carpeta `bin/`._
+Edita el archivo `.env` para definir tu usuario y contraseña de administrador:
+
+```ini
+WINSEC_ADMIN_USER=admin
+WINSEC_ADMIN_PASSWORD=tu_contraseña_segura
+```
+
+> **Nota**: Si no configuras una contraseña, la aplicación generará una **contraseña aleatoria segura** al iniciarse y la mostrará en la consola. ¡Asegúrate de guardarla!
 
 ### Paso 3: Ejecutar la Aplicación
 
-Inicia el servidor web:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-O simplemente:
+Inicia el servidor web. La aplicación **detectará y compilará automáticamente** los componentes de C# necesarios en el primer inicio.
 
 ```bash
 python -m app.main
+```
+
+Verás una salida similar a esta:
+
+```text
+RegistryInspector.exe not found. Attempting to build...
+RegistryInspector.exe built successfully.
+Starting WinSecDefender v2.1.0
+Dashboard available at http://127.0.0.1:8000
 ```
 
 ## 🏃 Guía de Uso
 
 1.  Abre tu navegador y ve a `http://127.0.0.1:8000`.
 2.  Verás el panel principal ("Security Dashboard").
-3.  Haz clic en **"Run Scan"**. El sistema ejecutará las pruebas en segundo plano (toma unos segundos).
-4.  Revisa los resultados en pantalla.
+3.  Haz clic en **"Run Scan"**.
+    - El navegador te pedirá usuario y contraseña. Usa las credenciales configuradas en `.env` (o las generadas en la consola).
+4.  El sistema ejecutará las pruebas en segundo plano.
+5.  Revisa los resultados en pantalla.
     - Si ves alertas en **Rojo**, son riesgos altos.
-5.  Si se encuentran vulnerabilidades, aparecerá el botón **"Generate Fixes"**.
-    - Haz clic para descargar o ver el script de remediación generado.
-6.  Ejecuta ese script en el servidor con permisos de Administrador para aplicar las correcciones.
+6.  Si se encuentran vulnerabilidades, aparecerá el botón **"Generate Fixes"**.
+    - Haz clic para descargar el script de remediación generado (`REMEDIATION_SCRIPT.ps1`).
+7.  Ejecuta ese script en el servidor con permisos de Administrador para aplicar las correcciones.
 
 ### Uso desde Línea de Comandos (CLI)
 

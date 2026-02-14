@@ -29,15 +29,23 @@ namespace SecurityInspector
                         if (o != null)
                         {
                             string currentVal = o.ToString();
-                            // Simple string comparison for flexibility
-                            Console.WriteLine(currentVal == expectedValue ? "SECURE" : "VULNERABLE");
+                            string status = (currentVal == expectedValue) ? "SECURE" : "VULNERABLE";
+                            Console.WriteLine("{{ \"status\": \"{0}\", \"value\": \"{1}\", \"expected\": \"{2}\" }}", status, currentVal, expectedValue);
                         }
-                        else { Console.WriteLine("ERROR: Value not found"); }
+                        else { 
+                            Console.WriteLine("{ \"status\": \"ERROR\", \"message\": \"Value not found\" }");
+                        }
                     }
-                    else { Console.WriteLine("ERROR: Key not found"); }
+                    else { 
+                        Console.WriteLine("{ \"status\": \"ERROR\", \"message\": \"Key not found\" }");
+                    }
                 }
             }
-            catch (Exception ex) { Console.WriteLine("ERROR: " + ex.Message); }
+            catch (Exception ex) { 
+                // Escape quotes for simplified JSON
+                string msg = ex.Message.Replace("\"", "'");
+                Console.WriteLine("{{ \"status\": \"ERROR\", \"message\": \"{0}\" }}", msg);
+            }
         }
     }
 }
