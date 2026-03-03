@@ -43,12 +43,20 @@ class ServiceConfigStrategy(IScanStrategy):
             return {"error": "Script not found"}
 
         try:
+            # SAFETY: Add timeout to prevent hanging on legacy systems
             process = await asyncio.create_subprocess_exec(
                 "powershell", "-ExecutionPolicy", "Bypass", "-File", ps_script_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await process.communicate()
+            
+            try:
+                # 30 second timeout for checking config
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                logger.error("PowerShell execution timed out")
+                return {"error": "Execution timed out"}
             
             if stdout:
                 try:
@@ -56,17 +64,32 @@ class ServiceConfigStrategy(IScanStrategy):
                     try:
                         decoded_out = stdout.decode("utf-8").strip()
                     except UnicodeDecodeError:
-                        # Fallback for Windows CP1252/CP850
                         decoded_out = stdout.decode("mbcs", errors="replace").strip()
-                        
-                    ps_data = json.loads(decoded_out)
-                    return {"System_Config": ps_data}
+                    
+                    # Robustness: Find the start and end of the JSON object
+                    # Legacy systems might output extra text or banners
+                    json_start = decoded_out.find('{')
+                    json_end = decoded_out.rfind('}')
+                    
+                    if json_start != -1 and json_end != -1:
+                        json_str = decoded_out[json_start:json_end+1]
+                        ps_data = json.loads(json_str)
+                        return {"System_Config": ps_data}
+                    elif not decoded_out:
+                         return {"error": "Empty output"}
+                    else:
+                        # Try direct load if no brackets found (unlikely for object but possible for single value)
+                        ps_data = json.loads(decoded_out)
+                        return {"System_Config": ps_data}
+
                 except json.JSONDecodeError:
-                    logger.error("Failed to decode PowerShell JSON output")
-                    return {"error": "Invalid JSON output", "raw": stdout.decode("mbcs", errors="replace")}
+                    show_snippet = decoded_out[:200] + "..." if len(decoded_out) > 200 else decoded_out
+                    logger.error(f"Failed to decode PowerShell JSON output: {show_snippet}")
+                    return {"error": "Invalid JSON output", "raw": show_snippet}
             else:
-                 logger.error(f"PowerShell Error: {stderr.decode()}")
-                 return {"error": stderr.decode()}
+                 err_msg = stderr.decode() if stderr else "No output"
+                 logger.error(f"PowerShell Error: {err_msg}")
+                 return {"error": err_msg}
 
         except Exception as e:
             logger.error(f"PowerShell execution failed: {str(e)}")

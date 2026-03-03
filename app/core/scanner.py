@@ -53,17 +53,26 @@ class HybridScanner:
                 "cmd": "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart"
             })
 
-        if ps_data.get("Unquoted_Services", "None") != "None":
-            # Improved robust fix script
+        if ps_data.get("Unquoted_Services", "None") != "None" and ps_data.get("Unquoted_Services") != []:
+            # Improved robust fix script with WQL optimization
             fix_code = r'''
-$services = Get-WmiObject win32_service | Where-Object { $_.StartMode -eq 'Auto' -and $_.PathName -notmatch '^"' -and $_.PathName -match '\s' }
-foreach ($service in $services) {
-    if ($service.PathName -notmatch '^\"') {
+# Optimized query to find candidates only (Server-Side Filtering)
+$wql = "Select Name, PathName, StartMode From Win32_Service Where StartMode='Auto' AND PathName LIKE '% %'"
+$candidates = Get-WmiObject -Query $wql -ErrorAction SilentlyContinue
+
+foreach ($service in $candidates) {
+    # Double check client-side safely
+    if ($service.PathName -notmatch '^"' -and $service.PathName -match '\s' -and $service.PathName -notmatch '^C:\\Windows\\') {
         $newPath = '"' + $service.PathName + '"'
-        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$($service.Name)" -Name "ImagePath" -Value $newPath
+        Write-Output "Fixing $($service.Name)..."
+        try {
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$($service.Name)" -Name "ImagePath" -Value $newPath -ErrorAction Stop
+        } catch {
+            Write-Error "Could not fix $($service.Name): $_"
+        }
     }
 }'''
-            self.fixes.append({"desc": "Fix Unquoted Service Paths", "cmd": fix_code})
+            self.fixes.append({"desc": "Fix Unquoted Service Paths (Optimized)", "cmd": fix_code})
 
     async def run_csharp_module(self, 
             key_path: str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", 

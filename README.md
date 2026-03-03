@@ -52,6 +52,14 @@ Si se detectan vulnerabilidades, el sistema genera automáticamente un script de
 - Visualización de resultados en tiempo real.
 - Reportes claros con clasificación de riesgo (ALTO/BAJO).
 
+### 6. 🛡️ Seguridad y Compatibilidad (Nuevo)
+
+- **Soporte Legacy**: Compatible con **Windows 7 / Server 2008 R2** (PowerShell v2.0+) mediante fallback automático WMI/CIM.
+- **Ejecución Segura**:
+  - **Anti-DoS**: Consultas WMI optimizadas (Server-Side Filtering) para minimizar el impacto en CPU/RAM.
+  - **Timeouts**: Mecanismos de seguridad (30s hard timeout) para evitar bloqueos en hosts no responsivos.
+  - **Low Noise**: Prioriza verificaciones pasivas (Registro) sobre comandos ruidosos.
+
 ---
 
 ## 🏗️ Arquitectura del Sistema
