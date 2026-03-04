@@ -1,5 +1,14 @@
 # WinSecDefender 🛡️
 
+## Licencias
+
+![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blueviolet.svg)
+![C#](https://img.shields.io/badge/C%23-.NET_4.5+-success.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-Web_API-009688.svg)
+![Windows Server](https://img.shields.io/badge/Windows_Server-2012_R2+-blue.svg)
+
 **WinSecDefender** es una plataforma integral de **auditoría de seguridad y endurecimiento (hardening)** diseñada específicamente para proteger entornos **Windows Server 2012 R2** y superiores. Utiliza un enfoque híbrido combinando la flexibilidad de **Python**, la potencia nativa de **PowerShell** y la velocidad de bajo nivel de **C#** para identificar y remediar vulnerabilidades críticas.
 
 ## 📖 Descripción del Proyecto
@@ -46,13 +55,21 @@ Si se detectan vulnerabilidades, el sistema genera automáticamente un script de
 - Habilita UAC.
   _Todo listo para ser ejecutado como Administrador._
 
-### 5. 📊 Panel de Control Web
+### 5. 🧠 Mapeo Dinámico MITRE ATT&CK (Nuevo)
+
+Integra la base de datos oficial (Enterprise matrix) usando `attackcti`:
+
+- **Enriquecimiento de Hallazgos**: Relaciona resultados sin contexto (ej. servicios mal configurados) con IDs Tácticos y Técnicos (ej. `T1574.009`).
+- **Caché Inteligente**: Usa un archivo local (`mitre_cache.json`) para procesar reportes instantáneamente sin depender de APIs en línea constantemente.
+- **Manejo de Deprecación**: Detecta e informa de técnicas de MITRE retiradas o fusionadas automáticamente.
+
+### 6. 📊 Panel de Control Web
 
 - Interfaz moderna construida con **FastAPI**.
 - Visualización de resultados en tiempo real.
-- Reportes claros con clasificación de riesgo (ALTO/BAJO).
+- Reportes claros con clasificación de riesgo (ALTO/BAJO) y metadata de mitigaciones.
 
-### 6. 🛡️ Seguridad y Compatibilidad (Nuevo)
+### 7. 🛡️ Seguridad y Compatibilidad
 
 - **Soporte Legacy**: Compatible con **Windows 7 / Server 2008 R2** (PowerShell v2.0+) mediante fallback automático WMI/CIM.
 - **Ejecución Segura**:
@@ -80,8 +97,14 @@ classDiagram
     class ServiceConfigStrategy
     class RegistryAuditStrategy
     class FileSystemStrategy
+    class MitreMapper {
+        +update_cache()
+        +get_technique_details(finding_key)
+        +enrich_report(report_data)
+    }
 
     ContextScanner --> IScanStrategy
+    ContextScanner --> MitreMapper : uses to enrich
     IScanStrategy <|.. NetworkScanStrategy
     IScanStrategy <|.. ServiceConfigStrategy
     IScanStrategy <|.. RegistryAuditStrategy
@@ -193,6 +216,7 @@ python -m app.cli --strategy file      # Permisos de archivos
 - `app/`: Código fuente de la aplicación principal.
   - `main.py`: Punto de entrada de FastAPI.
   - `core/`: Lógica de negocio (Scanner).
+    - `mitre_mapper.py`: Lógica de integración de MITRE ATT&CK.
   - `api/`: Endpoints de la API REST.
 - `scripts/`: Scripts auxiliares que ejecuta el motor.
   - `audit_script.ps1`: Lógica de auditoría de Windows.

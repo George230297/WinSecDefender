@@ -18,7 +18,10 @@ class HybridScanner:
         self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         from .context import ContextScanner
         from .strategies import NetworkScanStrategy, ServiceConfigStrategy, RegistryAuditStrategy
+        from .mitre_mapper import MitreMapper
+        
         self.context = ContextScanner(target_ip)
+        self.mitre_mapper = MitreMapper()
 
     async def scan_network_ports(self) -> List[Dict[str, Any]]:
         """Async port scanning using Strategy"""
@@ -28,8 +31,19 @@ class HybridScanner:
         
         # Extract specific result
         scan_result = results.get("Network_Scan", [])
-        self.report_data["Network_Scan"] = scan_result
-        return scan_result
+        
+        # We can enrich the wrapper dict to attach MITRE details to "Network_Scan"
+        enriched_results = self.mitre_mapper.enrich_report(results)
+        scan_result_enriched = enriched_results.get("Network_Scan", scan_result)
+        
+        self.report_data["Network_Scan"] = scan_result_enriched
+        # Also preserve techniques if they were added at root
+        if "mitre_techniques" in enriched_results:
+            if "mitre_techniques" not in self.report_data:
+                self.report_data["mitre_techniques"] = []
+            self.report_data["mitre_techniques"].extend(enriched_results["mitre_techniques"])
+
+        return scan_result_enriched
 
     async def run_powershell_module(self) -> Dict[str, Any]:
         """Executes PS1 script using Strategy"""
@@ -41,6 +55,7 @@ class HybridScanner:
         if "error" in ps_data:
              return ps_data
              
+        ps_data = self.mitre_mapper.enrich_report(ps_data)
         self.report_data["System_Config"] = ps_data
         self._analyze_ps_results(ps_data)
         return ps_data
@@ -93,6 +108,7 @@ foreach ($service in $candidates) {
         results = await self.context.execute_scan()
         
         uac_result = results.get("UAC_Check", {})
+        uac_result = self.mitre_mapper.enrich_report(uac_result)
         self.report_data["UAC_Check"] = uac_result
         
         # Analyze for fixes
@@ -111,6 +127,7 @@ foreach ($service in $candidates) {
         results = await self.context.execute_scan()
         
         fs_result = results.get("FileSystem_Check", {})
+        fs_result = self.mitre_mapper.enrich_report(fs_result)
         self.report_data["FileSystem_Check"] = fs_result
         return fs_result
 
